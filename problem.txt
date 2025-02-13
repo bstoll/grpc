@@ -1,0 +1,15 @@
+
+`bazel build //examples/cpp/prefixes/...`
+
+```
+[bstoll@bstoll-ct:grpc]$ find -L . -name service\*.pb.h
+./bazel-bin/examples/cpp/prefixes/_virtual_includes/service_proto/custom/prefix/examples/cpp/prefixes/service.pb.h
+./bazel-bin/examples/cpp/prefixes/_virtual_imports/service_proto/custom/prefix/examples/cpp/prefixes/service.grpc.pb.h
+./bazel-bin/examples/cpp/prefixes/_virtual_imports/service_proto/custom/prefix/examples/cpp/prefixes/service.pb.h
+./bazel-grpc/bazel-out/k8-fastbuild/bin/examples/cpp/prefixes/_virtual_includes/service_proto/custom/prefix/examples/cpp/prefixes/service.pb.h
+./bazel-grpc/bazel-out/k8-fastbuild/bin/examples/cpp/prefixes/_virtual_imports/service_proto/custom/prefix/examples/cpp/prefixes/service.grpc.pb.h
+./bazel-grpc/bazel-out/k8-fastbuild/bin/examples/cpp/prefixes/_virtual_imports/service_proto/custom/prefix/examples/cpp/prefixes/service.pb.h
+./bazel-out/k8-fastbuild/bin/examples/cpp/prefixes/_virtual_includes/service_proto/custom/prefix/examples/cpp/prefixes/service.pb.h
+./bazel-out/k8-fastbuild/bin/examples/cpp/prefixes/_virtual_imports/service_proto/custom/prefix/examples/cpp/prefixes/service.grpc.pb.h
+./bazel-out/k8-fastbuild/bin/examples/cpp/prefixes/_virtual_imports/service_proto/custom/prefix/examples/cpp/prefixes/service.pb.h
+```
