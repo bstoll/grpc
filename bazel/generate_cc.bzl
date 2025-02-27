@@ -47,11 +47,6 @@ def _strip_package_from_path(label_package, file):
         fail("'{}' does not lie within '{}'.".format(path, label_package))
     return path[prefix_len + len(label_package + "/"):]
 
-def _get_srcs_file_path(file):
-    if not file.is_source and file.path.startswith(file.root.path):
-        return file.path[len(file.root.path) + 1:]
-    return file.path
-
 def _join_directories(directories):
     massaged_directories = [directory for directory in directories if len(directory) != 0]
     return "/".join(massaged_directories)
@@ -70,19 +65,12 @@ def generate_cc_impl(ctx):
         for src in ctx.attr.srcs
         for f in src[ProtoInfo].transitive_imports.to_list()
     ]
-
-    # Determine early if we have virtual imports
-    has_virtual_imports = any([is_in_virtual_imports(proto) for proto in protos])
-
-    # Get output directory based on virtual imports
-    out_dir_info = get_out_dir(protos, ctx)
-    output_dir = out_dir_info.path
-
-    # Generate output file names
-    label_package = _join_directories([ctx.label.workspace_root, ctx.label.package])
     outs = []
+    proto_root = get_proto_root(
+        ctx.label.workspace_root,
+    )
 
-    # Define which formats to use based on whether we're using a plugin
+    label_package = _join_directories([ctx.label.workspace_root, ctx.label.package])
     if ctx.executable.plugin:
         outs += [
             proto_path_to_generated_filename(
@@ -121,13 +109,12 @@ def generate_cc_impl(ctx):
             )
             for proto in protos
         ]
-
     out_files = [ctx.actions.declare_file(out) for out in outs]
+    # Get output directory based on virtual imports
+    out_dir_info = get_out_dir(protos, ctx)
+    output_dir = out_dir_info.path
 
-    # Build protoc arguments
     arguments = []
-
-    # Configure plugin or cpp_out
     if ctx.executable.plugin:
         arguments += get_plugin_args(
             ctx.executable.plugin,
@@ -141,25 +128,19 @@ def generate_cc_impl(ctx):
         arguments.append("--cpp_out=" + ",".join(ctx.attr.flags) + ":" + output_dir)
         tools = []
 
-    # Deduplicate proto paths using a dictionary
-    proto_paths = {}
-
-    # Add the genfiles directory
     proto_root = get_proto_root(ctx.label.workspace_root)
     dir_out = str(ctx.genfiles_dir.path + proto_root)
-    proto_paths[dir_out] = True
-
-    # Add proto paths for all includes
+    proto_paths = [dir_out]
     for inc in includes:
-        proto_paths[get_include_directory(inc)] = True
-
-    # Add all unique proto paths to arguments
+        inc_dir = get_include_directory(inc)
+        if inc_dir not in proto_paths:
+            proto_paths.append(inc_dir)
     arguments += ["--proto_path={}".format(path) for path in proto_paths]
 
-    # Add proto files to compile
+    # Add proto files to compile.
     arguments += get_proto_arguments(protos, ctx.genfiles_dir.path)
 
-    # Handle well known protos
+    # create a list of well known proto files if the argument is non-None
     well_known_proto_files = []
     if ctx.attr.well_known_protos:
         f = ctx.attr.well_known_protos.files.to_list()[0].dirname
@@ -168,16 +149,16 @@ def generate_cc_impl(ctx):
                 "Error: Only @com_google_protobuf//:well_known_type_protos is supported",
             )  # buildifier: disable=print
         else:
-            well_known_path = f + "/../.."
-            if well_known_path not in proto_paths:
-                arguments.append("-I{}".format(well_known_path))
-            well_known_proto_files = ctx.attr.well_known_protos.files.to_list()
-
-    # Run protoc compiler
-    inputs = includes + well_known_proto_files + protos
+            # f points to "external/com_google_protobuf/src/google/protobuf"
+            # add -I argument to protoc so it knows where to look for the proto files.
+            arguments.append("-I{0}".format(f + "/../.."))
+            well_known_proto_files = [
+                f
+                for f in ctx.attr.well_known_protos.files.to_list()
+            ]
 
     ctx.actions.run(
-        inputs = inputs,
+        inputs = protos + includes + well_known_proto_files,
         tools = tools,
         outputs = out_files,
         executable = ctx.executable._protoc,
@@ -185,29 +166,20 @@ def generate_cc_impl(ctx):
         use_default_shell_env = True,
     )
 
-    # For virtual imports with gRPC plugin, create symlinks to _virtual_includes
-    if has_virtual_imports and ctx.executable.plugin:
-        virtual_includes_files = []
+    # Create symlinks to _virtual_includes from _virtual_imports for headers.
+    virtual_includes_files = []
+    for out_file in out_files:
+        if is_in_virtual_imports(out_file) and out_file.path.endswith(".grpc.pb.h"):
+            rel_path = out_file.path[out_file.path.find("_virtual_imports") + len("_virtual_imports"):]
+            virtual_includes_path = "_virtual_includes" + rel_path
+            virtual_includes_file = ctx.actions.declare_file(virtual_includes_path)
+            ctx.actions.symlink(
+                output = virtual_includes_file,
+                target_file = out_file,
+            )
+            virtual_includes_files.append(virtual_includes_file)
 
-        for out_file in out_files:
-            if "_virtual_imports" in out_file.path and out_file.path.endswith(".grpc.pb.h"):
-                # Create corresponding _virtual_includes path
-                rel_path = out_file.path[out_file.path.find("_virtual_imports") + len("_virtual_imports"):]
-                virtual_includes_path = "_virtual_includes" + rel_path
-                virtual_includes_file = ctx.actions.declare_file(virtual_includes_path)
-
-                # Create a symlink instead of copying
-                ctx.actions.symlink(
-                    output = virtual_includes_file,
-                    target_file = out_file,
-                )
-
-                virtual_includes_files.append(virtual_includes_file)
-
-        # Return both original and symlinked files
-        return DefaultInfo(files = depset(out_files + virtual_includes_files))
-
-    return DefaultInfo(files = depset(out_files))
+    return DefaultInfo(files = depset(out_files + virtual_includes_files))
 
 _generate_cc = rule(
     attrs = {
