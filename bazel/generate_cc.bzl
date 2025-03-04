@@ -166,11 +166,14 @@ def generate_cc_impl(ctx):
         use_default_shell_env = True,
     )
 
-    # Create symlinks to _virtual_includes from _virtual_imports for headers.
+    # Create symlinks from _virtual_imports to _virtual_includes for headers.
     virtual_includes_files = []
     for out_file in out_files:
-        if is_in_virtual_imports(out_file) and out_file.path.endswith(".grpc.pb.h"):
-            rel_path = out_file.path[out_file.path.find("_virtual_imports") + len("_virtual_imports"):]
+        if (is_in_virtual_imports(out_file) and
+            out_file.path.endswith(".grpc.pb.h")):
+            virtual_imports_str = "_virtual_imports"
+            path_idx = out_file.path.find(virtual_imports_str) + len(virtual_imports_str)
+            rel_path = out_file.path[path_idx:]
             virtual_includes_path = "_virtual_includes" + rel_path
             virtual_includes_file = ctx.actions.declare_file(virtual_includes_path)
             ctx.actions.symlink(
