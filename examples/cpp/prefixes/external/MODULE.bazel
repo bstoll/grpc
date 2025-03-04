@@ -1,0 +1,11 @@
+module(
+    name = "user",
+)
+
+bazel_dep(name = "grpc")
+bazel_dep(name = "abseil-cpp", version = "20240722.0", repo_name = "com_google_absl")
+
+local_path_override(
+    module_name = "grpc",
+    path = "../../../../",
+)

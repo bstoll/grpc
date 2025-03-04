@@ -1,0 +1,14 @@
+syntax = "proto3";
+package foobar;
+import "custom/prefix/service.proto";
+
+service HelloService {
+    rpc SayHello (HelloRequest) returns (HelloResponse);
+}
+message HelloRequest {
+    string greeting = 1;
+    helloworld.HelloRequest another = 2;
+}
+message HelloResponse {
+    string reply = 1;
+}
