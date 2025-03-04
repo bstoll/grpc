@@ -110,6 +110,7 @@ def generate_cc_impl(ctx):
             for proto in protos
         ]
     out_files = [ctx.actions.declare_file(out) for out in outs]
+
     # Get output directory based on virtual imports
     out_dir_info = get_out_dir(protos, ctx)
     output_dir = out_dir_info.path
